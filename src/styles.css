@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark;
+  logs: false;
+}
+@plugin "daisyui/theme" {
+  name: 'light';
+  default: true;
+  --color-primary: oklch(0.39 0.06 166);
+  --color-primary-content: oklch(0.99 0.01 166);
+  --color-base-100: oklch(0.997 0.003 90);
+  --color-base-200: oklch(0.966 0.006 90);
+  --color-base-300: oklch(0.898 0.012 90);
+  --color-base-content: oklch(0.26 0.018 166);
+  --radius-box: 1rem;
+  --radius-field: 0.5rem;
+}
+@plugin "daisyui/theme" {
+  name: 'dark';
+  --color-primary: oklch(0.79 0.09 166);
+  --color-primary-content: oklch(0.23 0.03 166);
+  --radius-box: 1rem;
+  --radius-field: 0.5rem;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  touch-action: manipulation;
+}
+textarea {
+  line-height: 1.65;
+}
+::selection {
+  background: var(--color-primary);
+  color: var(--color-primary-content);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "format": "nimble-playground",
+  "version": 1,
+  "prompts": [
+    {
+      "id": "example-refund",
+      "name": "Refund intent",
+      "updatedAt": "2026-10-06T00:00:00.000Z",
+      "draft": {
+        "state": "The headphones arrived broken. Please return my money; I do not want a replacement.",
+        "question": "Does the customer explicitly request a refund?",
+        "kind": "noul",
+        "options": []
+      }
+    }
+  ]
+}
