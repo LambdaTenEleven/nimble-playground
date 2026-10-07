@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { examples } from './domain'
-import { checkConnection, OLLAMA_URL, runDecision, supportsDecisions, unloadModel } from './ollama'
+import {
+  checkConnection,
+  normalizeOllamaUrl,
+  OLLAMA_URL,
+  runDecision,
+  supportsDecisions,
+  unloadModel,
+} from './ollama'
 
 afterEach(() => vi.unstubAllGlobals())
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
@@ -85,5 +92,20 @@ describe('direct Ollama connection', () => {
       'cancelled',
     )
     await expect(checkConnection()).rejects.toThrow('Cannot reach Ollama')
+  })
+})
+
+describe('normalizeOllamaUrl', () => {
+  it('accepts http(s) addresses and trims trailing slashes', () => {
+    expect(normalizeOllamaUrl(' http://localhost:11434/ ')).toBe('http://localhost:11434')
+    expect(normalizeOllamaUrl('192.168.1.20:11434')).toBe('http://192.168.1.20:11434')
+    expect(normalizeOllamaUrl('https://ollama.example.com/proxy/')).toBe(
+      'https://ollama.example.com/proxy',
+    )
+  })
+  it('rejects empty, non-http, and query-bearing addresses', () => {
+    expect(normalizeOllamaUrl('')).toBeNull()
+    expect(normalizeOllamaUrl('ftp://host')).toBeNull()
+    expect(normalizeOllamaUrl('http://host:11434/?x=1')).toBeNull()
   })
 })

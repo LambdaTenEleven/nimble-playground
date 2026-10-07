@@ -1,49 +1,22 @@
 import type { Connection } from '../ollama'
-import { OLLAMA_URL } from '../ollama'
-import { useState } from 'react'
+import { CopyCommand } from './CopyCommand'
 
-function Command({ children }: { children: string }) {
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState(false)
-  return (
-    <div className="mt-2">
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-base-300 bg-base-200 p-2 pl-3">
-        <code className="break-all text-sm">{children}</code>
-        <button
-          type="button"
-          className="btn btn-sm"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(children)
-              setCopied(true)
-              setError(false)
-            } catch {
-              setError(true)
-            }
-          }}
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      {error && (
-        <p role="status" className="mt-1 text-xs">
-          Copy is unavailable. Select the command above to copy it manually.
-        </p>
-      )}
-    </div>
-  )
-}
-
-export function SetupGuide({ connection }: { connection: Connection | null }) {
+export function SetupGuide({
+  connection,
+  ollamaUrl,
+}: {
+  connection: Connection | null
+  ollamaUrl: string
+}) {
   return (
     <div className="space-y-5 text-sm leading-relaxed">
-      <p className="text-base-content/70">
+      <p className="text-base-content/75">
         Nimble runs on your computer through Ollama. This page cannot install or start it for you.
       </p>
       <ol className="space-y-5">
         <li>
           <h3 className="font-semibold">1. Install or update Ollama</h3>
-          <p className="mt-1 text-base-content/70">
+          <p className="mt-1 text-base-content/75">
             Use Ollama 0.35 or newer for decision models.
             {connection && ` Your version: ${connection.version}.`}
           </p>
@@ -58,31 +31,31 @@ export function SetupGuide({ connection }: { connection: Connection | null }) {
         </li>
         <li>
           <h3 className="font-semibold">2. Start Ollama</h3>
-          <p className="mt-1 text-base-content/70">
+          <p className="mt-1 text-base-content/75">
             Open the Ollama desktop app. For a CLI installation, run this in a terminal and leave it
             running:
           </p>
-          <Command>ollama serve</Command>
+          <CopyCommand command="ollama serve" />
           <p className="mt-2 text-xs text-base-content/65">
             If the port is already in use, Ollama may already be running.
           </p>
         </li>
         <li>
           <h3 className="font-semibold">3. Download Nimble</h3>
-          <p className="mt-1 text-base-content/70">
+          <p className="mt-1 text-base-content/75">
             Run this in another terminal. Wait for the model download to finish, then retry the
             connection.
           </p>
-          <Command>ollama pull nimble</Command>
+          <CopyCommand command="ollama pull nimble" />
         </li>
       </ol>
       <details className="rounded-lg border border-base-300 p-3">
         <summary className="cursor-pointer font-medium">Still cannot connect?</summary>
-        <div className="mt-3 space-y-2 text-base-content/70">
+        <div className="mt-3 space-y-2 text-base-content/75">
           <p>
             Open this playground on <code>http://127.0.0.1:5173</code> or{' '}
             <code>http://localhost:5173</code>. It connects directly to{' '}
-            <code className="break-all">{OLLAMA_URL}</code>.
+            <code className="break-all">{ollamaUrl}</code>.
           </p>
           <p>
             Allow local-network access if your browser asks. Check that Ollama uses its default
@@ -98,9 +71,18 @@ export function SetupGuide({ connection }: { connection: Connection | null }) {
           </p>
         </div>
       </details>
-      <p className="text-xs text-base-content/65">
+      <p className="text-xs text-base-content/75">
         Once downloaded, decisions run locally. The first run loads Nimble into memory and may take
-        longer. Use “Unload model” to release memory without deleting the download.
+        longer. Use “Unload model” to release memory without deleting the download. See the{' '}
+        <a
+          className="link"
+          href="https://ollama.com/blog/ollama-now-supports-jev-style-decision-models"
+          target="_blank"
+          rel="noreferrer"
+        >
+          decision API announcement ↗
+        </a>{' '}
+        for protocol details.
       </p>
     </div>
   )

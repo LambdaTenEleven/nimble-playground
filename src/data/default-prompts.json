@@ -1,0 +1,91 @@
+[
+  {
+    "id": "example-ticket-routing",
+    "exampleId": "example-ticket-routing",
+    "name": "Route a support ticket",
+    "updatedAt": "2026-10-07T00:00:00.000Z",
+    "draft": {
+      "state": "I upgraded to the annual plan yesterday, but I was charged twice. Could you refund the extra payment?",
+      "question": "Which team should handle this support ticket?",
+      "kind": "choice",
+      "options": [
+        {
+          "label": "Billing",
+          "description": "Payments, subscriptions, and refunds"
+        },
+        {
+          "label": "Technical",
+          "description": "Bugs, errors, and integrations"
+        },
+        {
+          "label": "Other",
+          "description": "Anything outside billing or technical support"
+        }
+      ]
+    },
+    "cases": [
+      {
+        "id": "example-ticket-case-1",
+        "input": "I upgraded to the annual plan yesterday, but I was charged twice. Could you refund the extra payment?",
+        "expected": "Billing"
+      },
+      {
+        "id": "example-ticket-case-2",
+        "input": "The API returns a 500 error whenever I upload a document. Retrying does not help.",
+        "expected": "Technical"
+      },
+      {
+        "id": "example-ticket-case-3",
+        "input": "How do I change the email address shown on my invoices?",
+        "expected": "Billing"
+      },
+      {
+        "id": "example-ticket-case-4",
+        "input": "Can you add dark mode to the dashboard?",
+        "expected": "Other"
+      },
+      {
+        "id": "example-ticket-case-5",
+        "input": "SSO login keeps looping back to the sign-in page.",
+        "expected": "Technical"
+      }
+    ]
+  },
+  {
+    "id": "example-refund-intent",
+    "exampleId": "example-refund-intent",
+    "name": "Spot a refund request",
+    "updatedAt": "2026-10-07T00:00:00.000Z",
+    "draft": {
+      "state": "The headphones arrived broken. Please return my money; I do not want a replacement.",
+      "question": "Does the customer explicitly request a refund?",
+      "kind": "noul",
+      "options": []
+    }
+  },
+  {
+    "id": "example-urgency",
+    "exampleId": "example-urgency",
+    "name": "Assess urgency",
+    "updatedAt": "2026-10-07T00:00:00.000Z",
+    "draft": {
+      "state": "Our production checkout has been down for 20 minutes. No customers can complete a purchase.",
+      "question": "How urgently does this issue need attention?",
+      "kind": "score",
+      "options": [
+        {
+          "label": "Routine",
+          "description": "Can wait for normal prioritization"
+        },
+        {
+          "label": "Soon",
+          "description": "Significant issue, but a workaround exists"
+        },
+        {
+          "label": "Urgent",
+          "description": "Critical service is unavailable; immediate attention needed"
+        }
+      ]
+    }
+  }
+]

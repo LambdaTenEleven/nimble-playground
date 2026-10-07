@@ -1,5 +1,5 @@
-import { LIMITS, isRecord } from './domain'
-import type { Draft, SavedPrompt } from './domain'
+import { LIMITS, isRecord, defaultPrompts } from './domain'
+import type { Draft, SavedPrompt, TestCase } from './domain'
 
 export const STORAGE_KEY = 'nimble-playground.prompts.v1'
 export const BUNDLE_FORMAT = 'nimble-playground'
@@ -35,6 +35,25 @@ function readDraft(value: unknown): Draft {
   }
 }
 
+function readCases(value: unknown): TestCase[] {
+  if (!Array.isArray(value) || value.length > LIMITS.cases)
+    throw new Error('A prompt contains invalid test cases.')
+  const ids = new Set<string>()
+  return value.map((item) => {
+    if (
+      !isRecord(item) ||
+      !text(item.id, 100) ||
+      !item.id ||
+      ids.has(item.id) ||
+      !text(item.input, LIMITS.state) ||
+      !text(item.expected, LIMITS.label)
+    )
+      throw new Error('A prompt contains an invalid test case.')
+    ids.add(item.id)
+    return { id: item.id, input: item.input, expected: item.expected }
+  })
+}
+
 export function parseBundle(json: string): SavedPrompt[] {
   if (new Blob([json]).size > LIMITS.fileBytes)
     throw new Error('Choose a JSON file smaller than 2 MB.')
@@ -63,6 +82,7 @@ export function parseBundle(json: string): SavedPrompt[] {
       !text(prompt.name, 100) ||
       !prompt.name.trim() ||
       !text(prompt.updatedAt, 40) ||
+      (prompt.exampleId !== undefined && !text(prompt.exampleId, 100)) ||
       !Number.isFinite(Date.parse(prompt.updatedAt))
     )
       throw new Error('A saved prompt has invalid or duplicate metadata.')
@@ -72,6 +92,8 @@ export function parseBundle(json: string): SavedPrompt[] {
       name: prompt.name.trim(),
       updatedAt: prompt.updatedAt,
       draft: readDraft(prompt.draft),
+      ...(typeof prompt.exampleId === 'string' ? { exampleId: prompt.exampleId } : {}),
+      ...(prompt.cases !== undefined ? { cases: readCases(prompt.cases) } : {}),
     }
   })
 }
@@ -80,28 +102,38 @@ export function serializeBundle(prompts: SavedPrompt[]): string {
   return JSON.stringify({ format: BUNDLE_FORMAT, version: 1, prompts }, null, 2)
 }
 
-export function readLibrary(storage?: Pick<Storage, 'getItem'>): {
-  prompts: SavedPrompt[]
+export type LibraryData = { prompts: SavedPrompt[]; seededExampleIds: string[] }
+
+export function readLibrary(storage?: Pick<Storage, 'getItem'>): LibraryData & {
   error: string | null
 } {
   try {
     const json = (storage ?? localStorage).getItem(STORAGE_KEY)
-    return { prompts: json ? parseBundle(json) : [], error: null }
+    const prompts = json ? parseBundle(json) : []
+    const seededExampleIds: unknown = json ? (JSON.parse(json).seededExampleIds ?? []) : []
+    if (!Array.isArray(seededExampleIds) || !seededExampleIds.every((id) => text(id, 100)))
+      throw new Error('Invalid example history')
+    return { prompts, seededExampleIds, error: null }
   } catch {
     return {
       prompts: [],
+      seededExampleIds: [],
       error:
         'Your saved library could not be read. Browser storage may be unavailable or damaged. Export new prompts before leaving this page.',
     }
   }
 }
 
-export function writeLibrary(prompts: SavedPrompt[], storage?: Pick<Storage, 'setItem'>): void {
+export function writeLibrary(
+  prompts: SavedPrompt[],
+  storage?: Pick<Storage, 'setItem'>,
+  seededExampleIds: string[] = [],
+): void {
   if (prompts.length > LIMITS.prompts)
     throw new Error(
       'The library holds up to 100 prompts. Export and remove a few before adding more.',
     )
-  const json = serializeBundle(prompts)
+  const json = JSON.stringify({ format: BUNDLE_FORMAT, version: 1, prompts, seededExampleIds })
   if (new Blob([json]).size > LIMITS.fileBytes)
     throw new Error('The library is full (2 MB). Export and remove a few prompts to make room.')
   try {
@@ -111,6 +143,53 @@ export function writeLibrary(prompts: SavedPrompt[], storage?: Pick<Storage, 'se
       'Browser storage is unavailable or full. Your changes are kept in this tab only; export your library to keep them.',
     )
   }
+}
+
+export function uniqueName(name: string, prompts: SavedPrompt[]): string {
+  const names = new Set(prompts.map((prompt) => prompt.name))
+  let candidate = name.slice(0, 100)
+  let index = 2
+  while (names.has(candidate)) candidate = `${name.slice(0, 88)} (${index++})`
+  return candidate
+}
+
+// History is stored with the library so a deleted example is not seeded again.
+export function seedExamples(library: LibraryData, restore = false): LibraryData {
+  const prompts = [...library.prompts]
+  const seeded = new Set(library.seededExampleIds)
+  for (const example of defaultPrompts) {
+    if (!restore && seeded.has(example.id)) continue
+    const existing = prompts.find(
+      (p) =>
+        (p.exampleId === example.id || p.id === example.id || p.name === example.name) &&
+        JSON.stringify(p.draft) === JSON.stringify(example.draft),
+    )
+    if (existing) {
+      seeded.add(example.id)
+      continue
+    }
+    // Imported or edited records with the same ID always win during migration.
+    if (!restore && prompts.some((p) => p.id === example.id)) {
+      seeded.add(example.id)
+      continue
+    }
+    const prompt = {
+      ...structuredClone(example),
+      name: uniqueName(example.name, prompts),
+      id: prompts.some((p) => p.id === example.id) ? crypto.randomUUID() : example.id,
+    }
+    const candidate = [...prompts, prompt]
+    if (
+      candidate.length > LIMITS.prompts ||
+      new Blob([serializeBundle(candidate)]).size > LIMITS.fileBytes
+    ) {
+      if (restore) throw new Error('Make room in the prompt library before restoring examples.')
+      continue
+    }
+    prompts.push(prompt)
+    seeded.add(example.id)
+  }
+  return { prompts, seededExampleIds: [...seeded] }
 }
 
 export function mergeImport(current: SavedPrompt[], incoming: SavedPrompt[]): SavedPrompt[] {

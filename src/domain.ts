@@ -1,7 +1,18 @@
+import defaultPromptData from './data/default-prompts.json'
+
 export type DecisionKind = 'choice' | 'noul' | 'score'
 export type AnswerOption = { label: string; description: string }
 export type Draft = { state: string; question: string; kind: DecisionKind; options: AnswerOption[] }
-export type SavedPrompt = { id: string; name: string; draft: Draft; updatedAt: string }
+/** An input to evaluate with a prompt's question; `expected` is an answer label or ''. */
+export type TestCase = { id: string; input: string; expected: string }
+export type SavedPrompt = {
+  id: string
+  name: string
+  draft: Draft
+  updatedAt: string
+  exampleId?: string
+  cases?: TestCase[]
+}
 export type KeepAlive = '5m' | '30m' | 0
 export type Probability = { label: string; value: number }
 export type DecisionResult = {
@@ -23,13 +34,14 @@ export const LIMITS = {
   label: 100,
   description: 4_000,
   options: 26,
+  cases: 100,
   prompts: 100,
   fileBytes: 2 * 1024 * 1024,
 }
 export const kindNames: Record<DecisionKind, string> = {
-  choice: 'Choose one',
+  choice: 'One of a list',
   noul: 'Yes / no',
-  score: 'Score',
+  score: 'Score on a scale',
 }
 export const blankDraft = (): Draft => ({
   state: '',
@@ -42,51 +54,12 @@ export const blankDraft = (): Draft => ({
 })
 export const cloneDraft = (draft: Draft): Draft => structuredClone(draft)
 
-export const examples: { name: string; detail: string; draft: Draft }[] = [
-  {
-    name: 'Route a support ticket',
-    detail: 'Choose one · 3 teams',
-    draft: {
-      state:
-        'I upgraded to the annual plan yesterday, but I was charged twice. Could you refund the extra payment?',
-      question: 'Which team should handle this support ticket?',
-      kind: 'choice',
-      options: [
-        { label: 'Billing', description: 'Payments, subscriptions, and refunds' },
-        { label: 'Technical', description: 'Bugs, errors, and integrations' },
-        { label: 'Other', description: 'Anything outside billing or technical support' },
-      ],
-    },
-  },
-  {
-    name: 'Spot a refund request',
-    detail: 'Yes / no · intent detection',
-    draft: {
-      state: 'The headphones arrived broken. Please return my money; I do not want a replacement.',
-      question: 'Does the customer explicitly request a refund?',
-      kind: 'noul',
-      options: [],
-    },
-  },
-  {
-    name: 'Assess urgency',
-    detail: 'Score · 3 levels',
-    draft: {
-      state:
-        'Our production checkout has been down for 20 minutes. No customers can complete a purchase.',
-      question: 'How urgently does this issue need attention?',
-      kind: 'score',
-      options: [
-        { label: 'Routine', description: 'Can wait for normal prioritization' },
-        { label: 'Soon', description: 'Significant issue, but a workaround exists' },
-        {
-          label: 'Urgent',
-          description: 'Critical service is unavailable; immediate attention needed',
-        },
-      ],
-    },
-  },
-]
+export const defaultPrompts = defaultPromptData as SavedPrompt[]
+export const examples = defaultPrompts.map((prompt) => ({
+  name: prompt.name,
+  detail: kindNames[prompt.draft.kind],
+  draft: prompt.draft,
+}))
 
 export function draftError(draft: Draft): string | null {
   if (!draft.state.trim()) return 'Add some input text to evaluate.'
@@ -110,9 +83,10 @@ export function draftError(draft: Draft): string | null {
   return null
 }
 
-export function buildRequest(draft: Draft, model: string, keepAlive: KeepAlive) {
-  const error = draftError(draft)
-  if (error) throw new Error(error)
+export const REQUEST_LIMIT_BYTES = 64 * 1024
+
+/** Serializes a draft without validating it, so its size can be shown while editing. */
+export function requestBody(draft: Draft, model: string, keepAlive: KeepAlive) {
   const question = {
     type: draft.kind,
     instructions: draft.question.trim(),
@@ -131,19 +105,32 @@ export function buildRequest(draft: Draft, model: string, keepAlive: KeepAlive) 
         }
       : {}),
   }
-  const request = {
+  return {
     model,
     state: draft.state,
     questions: { decision: question },
     keep_alive: keepAlive,
   }
-  if (new TextEncoder().encode(JSON.stringify(request)).byteLength > 64 * 1024) {
+}
+
+export const requestBytes = (request: unknown) =>
+  new TextEncoder().encode(JSON.stringify(request)).byteLength
+
+export function buildRequest(draft: Draft, model: string, keepAlive: KeepAlive) {
+  const error = draftError(draft)
+  if (error) throw new Error(error)
+  const request = requestBody(draft, model, keepAlive)
+  if (requestBytes(request) > REQUEST_LIMIT_BYTES) {
     throw new Error(
       'This decision exceeds Ollama’s 64 KiB text request limit. Shorten the input or answer descriptions.',
     )
   }
   return request
 }
+
+/** Labels a result can be checked against: the answer names, or Yes / No. */
+export const answerLabels = (draft: Draft) =>
+  draft.kind === 'noul' ? ['Yes', 'No'] : draft.options.map((o) => o.label.trim())
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

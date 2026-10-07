@@ -2,6 +2,21 @@ import { buildRequest, isRecord, readResult } from './domain'
 import type { Draft, KeepAlive } from './domain'
 
 export const OLLAMA_URL = 'http://127.0.0.1:11434'
+
+/** Returns a normalized http(s) base URL, or null when the text is not one. */
+export function normalizeOllamaUrl(text: string): string | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.search || url.hash || url.username || url.password) return null
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '')
+  } catch {
+    return null
+  }
+}
+
 export type RunningModel = { name: string; sizeVram: number }
 export type Connection = {
   version: string
@@ -21,6 +36,7 @@ export class OllamaError extends Error {
 }
 
 async function request(
+  baseUrl: string,
   path: string,
   body?: unknown,
   signal?: AbortSignal,
@@ -30,7 +46,7 @@ async function request(
   const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
   let response: Response
   try {
-    response = await fetch(`${OLLAMA_URL}${path}`, {
+    response = await fetch(`${baseUrl}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined
         ? {}
@@ -77,11 +93,14 @@ export function supportsDecisions(version: string) {
   return !!match && (Number(match[1]) > 0 || Number(match[2]) >= 35)
 }
 
-export async function checkConnection(signal?: AbortSignal): Promise<Connection> {
+export async function checkConnection(
+  signal?: AbortSignal,
+  baseUrl = OLLAMA_URL,
+): Promise<Connection> {
   const [versionData, tags, ps] = await Promise.all([
-    request('/api/version', undefined, signal),
-    request('/api/tags', undefined, signal),
-    request('/api/ps', undefined, signal),
+    request(baseUrl, '/api/version', undefined, signal),
+    request(baseUrl, '/api/tags', undefined, signal),
+    request(baseUrl, '/api/ps', undefined, signal),
   ])
   if (
     !isRecord(versionData) ||
@@ -115,12 +134,25 @@ export async function runDecision(
   model: string,
   keepAlive: KeepAlive,
   signal: AbortSignal,
+  baseUrl = OLLAMA_URL,
 ) {
   const start = performance.now()
-  const raw = await request('/v1/systemone', buildRequest(draft, model, keepAlive), signal, 180_000)
+  const raw = await request(
+    baseUrl,
+    '/v1/systemone',
+    buildRequest(draft, model, keepAlive),
+    signal,
+    180_000,
+  )
   return readResult(raw, draft, model, performance.now() - start)
 }
 
-export async function unloadModel(model: string) {
-  await request('/api/generate', { model, keep_alive: 0, stream: false }, undefined, 30_000)
+export async function unloadModel(model: string, baseUrl = OLLAMA_URL) {
+  await request(
+    baseUrl,
+    '/api/generate',
+    { model, keep_alive: 0, stream: false },
+    undefined,
+    30_000,
+  )
 }
